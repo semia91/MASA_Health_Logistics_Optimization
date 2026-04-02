@@ -1,0 +1,20 @@
+# --- OS generated files ---
+# These are useless system files from Mac and Windows
+.DS_Store
+Thumbs.db
+
+# --- Python & Jupyter Caches ---
+# Temporary files created when running the code
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# --- Environment ---
+# DO NOT upload local environment (too heavy)
+masa_final_env/
+venv/
+env/
+
+# --- Heavy Data ---
+# Ignore large CSV files 
+data/*.csv
