@@ -22,3 +22,4 @@ data/*.csv
 # EXCEPTION: Allow HTML visualizations and the final unified network CSV
 !data/*.html
 !data/unified_drone_network.csv
+!data/df_health_diagnostic.csv 

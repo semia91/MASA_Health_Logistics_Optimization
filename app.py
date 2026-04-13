@@ -16,7 +16,7 @@ def load_hubs():
 @st.cache_data
 def load_facilities():
     # Use the health facilities data from your EDA
-    return pd.read_csv('data/ghana_health_facilities_clean.csv')
+    return pd.read_csv('data/df_health_diagnostic.csv')
 
 try:
     df_hubs = load_hubs()
@@ -31,8 +31,8 @@ st.sidebar.markdown("---")
 
 # 1. FACILITY SELECTION
 st.sidebar.subheader("Step 1: Destination")
-selected_facility_name = st.sidebar.selectbox("Select Target Health Facility:", df_facilities['FacilityName'].unique())
-facility_info = df_facilities[df_facilities['FacilityName'] == selected_facility_name].iloc[0]
+selected_facility_name = st.sidebar.selectbox("Select Target Health Facility:", df_facilities['Facility_Name'].unique())
+facility_info = df_facilities[df_facilities['Facility_Name'] == selected_facility_name].iloc[0]
 dest_coords = (facility_info['Latitude'], facility_info['Longitude'])
 
 # 2. CARGO SELECTION
