@@ -19,5 +19,6 @@ env/
 # Ignore large CSV files 
 data/*.csv
 
-# EXCEPTION: Allow HTML visualizations
+# EXCEPTION: Allow HTML visualizations and the final unified network CSV
 !data/*.html
+!data/unified_drone_network.csv
