@@ -7,7 +7,7 @@ try:
     from geopy.distance import geodesic
 except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "geopy"])
-    from geopy.distance import geodesic
+    import geopy
 
 try:
     from streamlit_folium import st_folium
