@@ -1,9 +1,23 @@
 import streamlit as st
+import subprocess
+import sys
+
+# --- TRICK POUR FORCER L'INSTALLATION ---
+try:
+    from geopy.distance import geodesic
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "geopy"])
+    from geopy.distance import geodesic
+
+try:
+    from streamlit_folium import st_folium
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-folium"])
+    from streamlit_folium import st_folium
+
 import pandas as pd
-from geopy.distance import geodesic
 import time
 import folium
-from streamlit_folium import st_folium
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="MASA | Dispatch Center", layout="wide", page_icon="🚁")
@@ -40,7 +54,7 @@ st.sidebar.subheader("Step 2: Cargo")
 cargo_type = st.sidebar.selectbox("Item Type:", ["Vaccines", "Blood Bags", "Emergency Meds"])
 quantity = st.sidebar.number_input("Quantity:", min_value=1, value=1, step=1)
 
-# Weight Logic (from your business report)
+# Weight Logic
 weight_map = {"Vaccines": 0.2, "Blood Bags": 0.5, "Emergency Meds": 0.3}
 total_weight = quantity * weight_map[cargo_type]
 st.sidebar.info(f"⚖️ Total Weight: {total_weight:.2f} kg")
