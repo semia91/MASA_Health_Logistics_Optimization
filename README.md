@@ -19,6 +19,11 @@ This project was developed during the **Jedha Bootcamp Full Stack Data Science**
 ## Key Results
 - **Optimized Coverage**: Projected increase of 18% to 25% in population access.
 - **Cost Efficiency**: Proposed CAPEX of **$1.2M** vs. traditional **$16M** infrastructures.
+- ## Live Demo
+You can access the interactive Dispatch System here:
+**[MASA | Medical Air Supply Application](https://huggingface.co/spaces/semia91/MASA-Logistics)**
+
+*(Note: Use the "Demo Mode" button on the login page for immediate access.)*
 
 ## Team
 - **Semia Ben Amara** (Data Scientist / Engineer)
