@@ -1,114 +1,191 @@
 import streamlit as st
-import subprocess
-import sys
-
-# --- TRICK POUR FORCER L'INSTALLATION ---
-try:
-    from geopy.distance import geodesic
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "geopy"])
-    import geopy
-
-try:
-    from streamlit_folium import st_folium
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-folium"])
-    from streamlit_folium import st_folium
-
 import pandas as pd
-import time
 import folium
+from streamlit_folium import st_folium
+from geopy.distance import geodesic
+import time
+from PIL import Image
+import os
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="MASA | Dispatch Center", layout="wide", page_icon="🚁")
+# --- CONFIG ---
+app_full_name = "Medical Air Systems Application (MASA)"
+st.set_page_config(page_title=app_full_name, layout="wide", page_icon="🚁")
 
-# --- DATA LOADING ---
+# --- 1. DATA LOADING FUNCTIONS ---
 @st.cache_data
-def load_hubs():
-    return pd.read_csv('data/unified_drone_network.csv')
+def load_data():
+    hubs = pd.read_csv('unified_drone_network.csv')
+    facilities = pd.read_csv('df_health_diagnostic.csv')
+    return hubs, facilities
 
-@st.cache_data
-def load_facilities():
-    # Use the health facilities data from your EDA
-    return pd.read_csv('data/df_health_diagnostic.csv')
+# Function to locate the logo file
+def get_logo():
+    for ext in ['LOGO_MASA_FINAL.png', 'LOGO_MASA_FINAL.jpg']:
+        if os.path.exists(ext):
+            return ext
+    return None
 
-try:
-    df_hubs = load_hubs()
-    df_facilities = load_facilities()
-except Exception as e:
-    st.error("Data files missing. Please check your 'data' folder.")
+# --- 2. SESSION STATE INITIALIZATION ---
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+if 'page' not in st.session_state:
+    st.session_state['page'] = 'dispatch'
+if 'order_data' not in st.session_state:
+    st.session_state['order_data'] = {}
+
+# --- 3. LOGIN PAGE (RGPD COMPLIANCE SIMULATION) ---
+if not st.session_state['logged_in']:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        logo = get_logo()
+        if logo:
+            st.image(logo, use_container_width=True)
+        
+        st.title(f"🔐 {app_full_name}")
+        st.info("💡 Click below to skip authentication")
+        
+        if st.button("🚀 Access Dispatch System (Demo Mode)", use_container_width=True):
+            st.session_state['logged_in'] = True
+            st.rerun()
+            
+        st.markdown("---")
+        st.subheader("Staff Authentication")
+        st.text_input("User Email")
+        st.text_input("Password", type="password")
+        if st.button("Login"):
+            st.session_state['logged_in'] = True
+            st.rerun()
     st.stop()
 
-# --- SIDEBAR: MISSION CONTROL ---
-st.sidebar.title("🎮 Mission Control")
+# --- 4. LOAD ASSETS ---
+df_hubs, df_facilities = load_data()
+
+# ---------------------------------------------------------
+# PAGE 1: DISPATCH CENTER
+# ---------------------------------------------------------
+if st.session_state['page'] == 'dispatch':
+    
+    # SIDEBAR
+    st.sidebar.title("MASA Control")
+    logo = get_logo()
+    if logo:
+        st.sidebar.image(logo, use_container_width=True)
+
+    st.sidebar.subheader("📍 1. Destination")
+    selected_fac = st.sidebar.selectbox("Select Health Facility:", df_facilities['Facility_Name'].unique())
+    target = df_facilities[df_facilities['Facility_Name'] == selected_fac].iloc[0]
+    target_coords = (target['Latitude'], target['Longitude'])
+
+    st.sidebar.subheader("📦 2. Mixed Order")
+    emergency = st.sidebar.select_slider("Urgency Level:", options=["Routine", "Urgent", "Critical"])
+    col_v, col_b, col_m = st.sidebar.columns(3)
+    qty_v = col_v.number_input("Vaccines", min_value=0, step=1)
+    qty_b = col_b.number_input("Blood", min_value=0, step=1)
+    qty_m = col_m.number_input("Meds", min_value=0, step=1)
+
+    total_weight = (qty_v * 0.2) + (qty_b * 0.5) + (qty_m * 0.3)
+    drones_needed = int(-(total_weight // -2.0)) if total_weight > 0 else 0
+    st.sidebar.info(f"Payload: {total_weight:.2f} kg | Drones: {drones_needed}")
+    
+    confirm_button = st.sidebar.button("✅ Confirm Order", use_container_width=True)
+
+    st.title(f"🛰️ {app_full_name}")
+    
+    # NETWORK LOGIC
+    distances = df_hubs.apply(lambda row: geodesic(target_coords, (row['Latitude'], row['Longitude'])).km, axis=1)
+    df_hubs['dist_to_target'] = distances
+    reachable = df_hubs[df_hubs['dist_to_target'] <= df_hubs['Range_km']]
+
+    col_map, col_info = st.columns([2, 1])
+
+    with col_info:
+        st.subheader("📋 Dispatch Summary")
+        if not reachable.empty:
+            best_hub = reachable.sort_values('dist_to_target').iloc[0]
+            st.success(f"**Optimal Hub:** {best_hub['Hub_ID']}")
+            st.write(f"**Network Operator:** {best_hub['Operator']}")
+            
+            # Duration: 1.5 min/km + 5 min prep time
+            duration = int(best_hub['dist_to_target'] * 1.5) + 5
+            st.metric("Flight Distance", f"{best_hub['dist_to_target']:.2f} km")
+            st.metric("Estimated Arrival (ETA)", f"{duration} min")
+            
+            if confirm_button:
+                if total_weight > 0:
+                    st.session_state['order_data'] = {
+                        'facility': selected_fac, 'hub': best_hub['Hub_ID'],
+                        'operator': best_hub['Operator'], 'duration': duration,
+                        'drones': drones_needed, 'emergency': emergency
+                    }
+                    st.session_state['page'] = 'tracking'
+                    st.rerun()
+                else:
+                    st.error("Error: Order is empty!")
+        else:
+            st.error("🚨 OUT OF RANGE: Target unreachable by current network.")
+
+    with col_map:
+        m = folium.Map(location=[target['Latitude'], target['Longitude']], zoom_start=8, tiles='CartoDB Positron')
+        
+        # DISPLAY NETWORK COVERAGE
+        for _, hub in df_hubs.iterrows():
+            color = 'purple' if hub['Operator'] == 'MASA' else 'black'
+            # Hub Marker
+            folium.Marker(
+                [hub['Latitude'], hub['Longitude']], 
+                icon=folium.Icon(color=color, icon='plane', prefix='fa'),
+                tooltip=f"{hub['Hub_ID']} ({hub['Operator']})"
+            ).add_to(m)
+            # Coverage Circle
+            folium.Circle(
+                [hub['Latitude'], hub['Longitude']],
+                radius=hub['Range_km'] * 1000,
+                color=color,
+                fill=True,
+                fill_opacity=0.05,
+                weight=1
+            ).add_to(m)
+        
+        # Target Marker
+        folium.Marker(target_coords, icon=folium.Icon(color='red', icon='hospital-o', prefix='fa')).add_to(m)
+        
+        # Flight Path Line
+        if not reachable.empty:
+            folium.PolyLine([target_coords, (best_hub['Latitude'], best_hub['Longitude'])], color="blue", weight=3, dash_array='10').add_to(m)
+        
+        st_folium(m, width="100%", height=550, key="dispatch_map")
+
+# ---------------------------------------------------------
+# PAGE 2: LIVE TRACKING
+# ---------------------------------------------------------
+elif st.session_state['page'] == 'tracking':
+    data = st.session_state['order_data']
+    st.title("📦 Real-Time Mission Tracking")
+    st.success(f"Order successfully dispatched to **{data['facility']}**")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🔍 Mission Details")
+        st.write(f"**Origin Hub:** {data['hub']} ({data['operator']})")
+        st.write(f"**Priority:** {data['emergency']}")
+        st.write(f"**Fleet:** {data['drones']} drones deployed")
+        st.metric("Remaining Flight Time", f"{data['duration']} min")
+    with c2:
+        st.subheader("📈 Flight Progress")
+        tracking_table = {
+            "Milestone": ["Order Received", "Drone Arming", "Take-off", "En Route", "Delivery"], 
+            "Status": ["✅ Completed", "✅ Completed", "🚀 In Progress", "⏳ Pending", "⏳ Pending"]
+        }
+        st.table(pd.DataFrame(tracking_table))
+
+    st.markdown("---")
+    if st.button("➕ Start New Mission"):
+        st.session_state['page'] = 'dispatch'
+        st.rerun()
+
+# LOGOUT
 st.sidebar.markdown("---")
-
-# 1. FACILITY SELECTION
-st.sidebar.subheader("Step 1: Destination")
-selected_facility_name = st.sidebar.selectbox("Select Target Health Facility:", df_facilities['Facility_Name'].unique())
-facility_info = df_facilities[df_facilities['Facility_Name'] == selected_facility_name].iloc[0]
-dest_coords = (facility_info['Latitude'], facility_info['Longitude'])
-
-# 2. CARGO SELECTION
-st.sidebar.subheader("Step 2: Cargo")
-cargo_type = st.sidebar.selectbox("Item Type:", ["Vaccines", "Blood Bags", "Emergency Meds"])
-quantity = st.sidebar.number_input("Quantity:", min_value=1, value=1, step=1)
-
-# Weight Logic
-weight_map = {"Vaccines": 0.2, "Blood Bags": 0.5, "Emergency Meds": 0.3}
-total_weight = quantity * weight_map[cargo_type]
-st.sidebar.info(f"⚖️ Total Weight: {total_weight:.2f} kg")
-
-# Drone Allocation Logic (Max 2kg per drone)
-drones_needed = int(-(total_weight // -2.0)) # Ceiling division
-st.sidebar.warning(f"🚀 Deployment: {drones_needed} Drone(s)")
-
-# --- MAIN INTERFACE ---
-st.title("🚁 MASA Logistics Dashboard")
-st.write(f"**Targeting:** {selected_facility_name} | **Region:** {facility_info.get('Region', 'N/A')}")
-
-col_map, col_stats = st.columns([2, 1])
-
-# LOGIC: FIND BEST HUB
-distances = df_hubs.apply(lambda row: geodesic(dest_coords, (row['Latitude'], row['Longitude'])).km, axis=1)
-df_hubs['dist_to_target'] = distances
-# Find hubs that can actually reach the target
-reachable = df_hubs[df_hubs['dist_to_target'] <= df_hubs['Range_km']]
-
-with col_stats:
-    st.subheader("📡 Connection Status")
-    if not reachable.empty:
-        best_hub = reachable.sort_values('dist_to_target').iloc[0]
-        st.success(f"**Best Hub Found:** {best_hub['Hub_ID']}")
-        st.metric("Operator", best_hub['Operator'])
-        st.metric("Flight Distance", f"{best_hub['dist_to_target']:.2f} km")
-        st.metric("Estimated Flight Time", f"{int(best_hub['dist_to_target'] * 1.2)} min")
-        
-        # DISPATCH BUTTON
-        if st.button("🚀 SUBMIT DISPATCH ORDER", use_container_width=True):
-            with st.status("Initializing flight sequence...", expanded=True) as status:
-                time.sleep(1)
-                st.write(f"Calculating trajectory to {selected_facility_name}...")
-                time.sleep(1)
-                st.write(f"Assigning {drones_needed} drone(s) from {best_hub['Hub_ID']}...")
-                time.sleep(1.5)
-                status.update(label="MISSION DISPATCHED!", state="complete", expanded=False)
-            st.balloons()
-    else:
-        st.error("❌ NO REACHABLE HUB FOUND FOR THIS LOCATION")
-        best_hub = None
-
-with col_map:
-    # Visualization
-    m = folium.Map(location=[facility_info['Latitude'], facility_info['Longitude']], zoom_start=9, tiles='CartoDB Positron')
-    
-    # Marker for Facility
-    folium.Marker(dest_coords, popup=selected_facility_name, icon=folium.Icon(color='red', icon='h-square', prefix='fa')).add_to(m)
-    
-    # Marker for Hub & Line
-    if best_hub is not None:
-        hub_coords = (best_hub['Latitude'], best_hub['Longitude'])
-        folium.Marker(hub_coords, popup=f"Origin: {best_hub['Hub_ID']}", icon=folium.Icon(color='black', icon='plane', prefix='fa')).add_to(m)
-        folium.PolyLine([dest_coords, hub_coords], color="blue", weight=3, opacity=0.7, dash_array='10').add_to(m)
-        
-    st_folium(m, width=800, height=500)
+if st.sidebar.button("Logout"):
+    st.session_state['logged_in'] = False
+    st.session_state['page'] = 'dispatch'
+    st.rerun()
