@@ -15,8 +15,8 @@ API_MLOPS_URL = "http://localhost:8000/predict"
 # --- 1. DATA LOADING FUNCTIONS ---
 @st.cache_data
 def load_data():
-    # Chargement local des hôpitaux
-    facilities = pd.read_csv('df_health_diagnostic.csv')
+    # On ajoute le chemin du dossier 'data/' pour indiquer à Pandas où chercher
+    facilities = pd.read_csv('data/df_health_diagnostic.csv')
     return facilities
 
 def get_logo():
