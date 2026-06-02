@@ -10,7 +10,7 @@ app_full_name = "Medical Air Systems Application (MASA)"
 st.set_page_config(page_title=app_full_name, layout="wide", page_icon="🚁")
 
 # URL de ton API FastAPI MLOps locale (Container Docker port 8000 via ngrok)
-API_MLOPS_URL = "https://gesture-valid-gigabyte.ngrok-free" 
+API_MLOPS_URL = "https://gesture-valid-gigabyte.ngrok-free.dev" 
 
 # --- 1. DATA LOADING FUNCTIONS ---
 @st.cache_data
