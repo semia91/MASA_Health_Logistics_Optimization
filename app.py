@@ -18,7 +18,7 @@ def load_data():
     # Chargement des hôpitaux dans le sous-dossier data
     facilities = pd.read_csv('data/df_health_diagnostic.csv')
     # Réintégration du fichier des hubs pour l'affichage visuel de la carte
-    hubs = pd.read_csv('unified_drone_network.csv')
+    hubs = pd.read_csv('data/unified_drone_network.csv')
     return hubs, facilities
 
 def get_logo():
