@@ -10,7 +10,7 @@ app_full_name = "Medical Air Systems Application (MASA)"
 st.set_page_config(page_title=app_full_name, layout="wide", page_icon="🚁")
 
 # URL de ton API FastAPI MLOps locale (Container Docker port 8000 via ngrok)
-API_MLOPS_URL = "https://gesture-valid-gigabyte.ngrok-free" 
+API_MLOPS_URL = "https://gesture-valid-gigabyte.ngrok-free.dev/predict"
 
 # --- 1. DATA LOADING FUNCTIONS ---
 @st.cache_data
@@ -198,6 +198,7 @@ if st.session_state['page'] == 'dispatch':
         st_folium(m, width="100%", height=500, key="dispatch_map")
 
 # ---------------------------------------------------------
+# ---------------------------------------------------------
 # PAGE 2: LIVE TRACKING
 # ---------------------------------------------------------
 elif st.session_state['page'] == 'tracking':
@@ -205,15 +206,29 @@ elif st.session_state['page'] == 'tracking':
     st.title("📦 Real-Time Mission Tracking")
     st.success(f"Order successfully dispatched to **{data['facility']}**")
     
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("🔍 Mission Details")
+    # Rappel de la météo capturée lors du dispatch
+    st.info(f"🌦️ **Weather Conditions during Launch:** {data.get('wind', 15.0)} km/h wind | {data.get('temp', 30.0)}°C")
+    
+    col_fleet, col_progress = st.columns(2)
+    
+    with col_fleet:
+        st.subheader("🔍 Mission & Fleet Details")
         st.write(f"**Origin Hub:** {data['hub']} ({data['operator']})")
-        st.write(f"**Priority:** {data['emergency']}")
-        st.write(f"**Fleet:** {data['drones']} drones deployed")
-        st.metric("Model Predicted Flight Time", f"{data['duration']} min")
-        st.metric("Estimated Battery Consumption", f"{data['battery_loss']} %")
-    with c2:
+        st.write(f"**Priority Level:** {data['emergency']}")
+        st.write(f"**Total Fleet:** {data['drones']} active drone(s) deployed")
+        
+        st.markdown("---")
+        st.subheader("🚁 Individual Drone Status")
+        
+        # Affichage dynamique pour chaque drone de la flotte
+        for i in range(1, data['drones'] + 1):
+            with st.expander(f"🤖 Drone #{i} - Telemetry Predictions", expanded=True):
+                c_drone_eta, c_drone_bat = st.columns(2)
+                # Affichage des métriques par drone
+                c_drone_eta.metric(f"Flight Time", f"{data['duration']} min")
+                c_drone_bat.metric(f"Battery Consumption", f"{data['battery_loss']}%", delta=f"{100 - float(data['battery_loss']):.1f}% Remaining", delta_color="normal")
+                
+    with col_progress:
         st.subheader("📈 Flight Progress")
         tracking_table = {
             "Milestone": ["Order Received", "Drone Arming", "Take-off", "En Route", "Delivery"], 
