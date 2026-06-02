@@ -137,13 +137,19 @@ if st.session_state['page'] == 'dispatch':
                 c_eta.metric("ML Predicted ETA", f"{assigned_hub_data['predicted_eta_minutes']} min")
                 c_bat.metric("Predicted Battery Loss", f"{assigned_hub_data['predicted_battery_loss_pct']} %")
                 
+
                 if confirm_button:
                     if total_weight > 0:
                         st.session_state['order_data'] = {
-                            'facility': selected_fac, 'hub': assigned_hub_data['assigned_hub_id'],
-                            'operator': assigned_hub_data['hub_operator'], 'duration': assigned_hub_data['predicted_eta_minutes'],
+                            'facility': selected_fac,
+                            'hub': assigned_hub_data['assigned_hub_id'],
+                            'operator': assigned_hub_data['hub_operator'],
+                            'duration': assigned_hub_data['predicted_eta_minutes'],
                             'battery_loss': assigned_hub_data['predicted_battery_loss_pct'],
-                            'drones': drones_needed, 'emergency': emergency
+                            'drones': drones_needed,
+                            'emergency': emergency,
+                            'wind': live_wind,
+                            'temp': live_temp
                         }
                         st.session_state['page'] = 'tracking'
                         st.rerun()
