@@ -9,17 +9,15 @@ import os
 app_full_name = "Medical Air Systems Application (MASA)"
 st.set_page_config(page_title=app_full_name, layout="wide", page_icon="🚁")
 
-# URL de ton API FastAPI MLOps locale (Container Docker port 8000 via ngrok)
-API_MLOPS_URL = "https://gesture-valid-gigabyte.ngrok-free.dev/predict"
+# URL de ton API FastAPI MLOps locale (Container Docker port 8000)
+API_MLOPS_URL = "http://localhost:8000/predict"
 
 # --- 1. DATA LOADING FUNCTIONS ---
 @st.cache_data
 def load_data():
-    # Chargement des hôpitaux dans le sous-dossier data
-    facilities = pd.read_csv('data/df_health_diagnostic.csv')
-    # Réintégration du fichier des hubs pour l'affichage visuel de la carte
-    hubs = pd.read_csv('data/unified_drone_network.csv')
-    return hubs, facilities
+    # Chargement local des hôpitaux
+    facilities = pd.read_csv('df_health_diagnostic.csv')
+    return facilities
 
 def get_logo():
     for ext in ['LOGO_MASA_FINAL.png', 'LOGO_MASA_FINAL.jpg']:
@@ -28,7 +26,7 @@ def get_logo():
     return None
 
 def get_live_weather(lat, lon):
-    """Va chercher la météo en direct au Ghana pour les coordonnées GPS"""
+    """Va chercher la météo en direct sur le lieu de livraison au Ghana"""
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,wind_speed_10m"
     try:
         res = requests.get(url, timeout=5)
@@ -37,7 +35,7 @@ def get_live_weather(lat, lon):
             return data["wind_speed_10m"], data["temperature_2m"]
     except Exception:
         pass
-    return 15.0, 30.0  # Valeurs de secours
+    return 15.0, 30.0  # Valeurs par défaut en cas de coupure internet
 
 # --- 2. SESSION STATE INITIALIZATION ---
 if 'logged_in' not in st.session_state:
@@ -47,7 +45,7 @@ if 'page' not in st.session_state:
 if 'order_data' not in st.session_state:
     st.session_state['order_data'] = {}
 
-# --- 3. LOGIN PAGE (CONFORMITÉ RGPD PRÉSERVÉE) ---
+# --- 3. LOGIN PAGE ---
 if not st.session_state['logged_in']:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -56,23 +54,15 @@ if not st.session_state['logged_in']:
             st.image(logo, use_container_width=True)
         
         st.title(f"🔐 {app_full_name}")
-        st.info("💡 Click below to skip authentication (Demo Mode)")
+        st.info("💡 Click below to skip authentication")
         
         if st.button("🚀 Access Dispatch System (Demo Mode)", use_container_width=True):
-            st.session_state['logged_in'] = True
-            st.rerun()
-            
-        st.markdown("---")
-        st.subheader("Staff Authentication (RGPD Compliant Workspace)")
-        st.text_input("User Email (Logs encrypted)")
-        st.text_input("Password", type="password")
-        if st.button("Login Secured"):
             st.session_state['logged_in'] = True
             st.rerun()
     st.stop()
 
 # --- 4. LOAD ASSETS ---
-df_hubs, df_facilities = load_data()
+df_facilities = load_data()
 
 # ---------------------------------------------------------
 # PAGE 1: DISPATCH CENTER
@@ -90,7 +80,7 @@ if st.session_state['page'] == 'dispatch':
     target = df_facilities[df_facilities['Facility_Name'] == selected_fac].iloc[0]
     target_coords = (target['Latitude'], target['Longitude'])
 
-    # Extraction de la météo live
+    # Récupération de la vraie météo du lieu choisi
     live_wind, live_temp = get_live_weather(target['Latitude'], target['Longitude'])
 
     st.sidebar.subheader("📦 2. Mixed Order")
@@ -112,9 +102,9 @@ if st.session_state['page'] == 'dispatch':
 
     with col_info:
         st.subheader("📋 MLOps Real-Time Dispatch Summary")
-        st.write(f"🌤️ **Live Weather at Destination:** {live_wind} km/h wind | {live_temp}°C")
+        st.write(f"🌤️ **Live Weather Context at Destination:** {live_wind} km/h wind | {live_temp}°C")
         
-        # Requête vers ton API FastAPI
+        # APPEL A L'API DOCKER DU PROJET LEAD
         payload = {
             "hospital_latitude": float(target['Latitude']),
             "hospital_longitude": float(target['Longitude']),
@@ -123,81 +113,43 @@ if st.session_state['page'] == 'dispatch':
             "air_temperature_c": float(live_temp)
         }
         
-        assigned_hub_data = None
         try:
-            response = requests.post(API_MLOPS_URL, json=payload, timeout=5)
+            with st.spinner("Connecting to MLOps Prediction Container..."):
+                response = requests.post(API_MLOPS_URL, json=payload, timeout=5)
+            
             if response.status_code == 200:
-                assigned_hub_data = response.json()
+                api_data = response.json()
                 
-                st.success(f"**Assigned Hub:** {assigned_hub_data['assigned_hub_id']}")
-                st.write(f"**Network Operator:** {assigned_hub_data['hub_operator']}")
+                st.success(f"**Assigned Hub:** {api_data['assigned_hub_id']}")
+                st.write(f"**Network Operator:** {api_data['hub_operator']}")
                 
                 c_dist, c_eta, c_bat = st.columns(3)
-                c_dist.metric("Calculated Distance", f"{assigned_hub_data['distance_km']} km")
-                c_eta.metric("ML Predicted ETA", f"{assigned_hub_data['predicted_eta_minutes']} min")
-                c_bat.metric("Predicted Battery Loss", f"{assigned_hub_data['predicted_battery_loss_pct']} %")
+                c_dist.metric("Calculated Distance", f"{api_data['distance_km']} km")
+                c_eta.metric("ML Predicted ETA", f"{api_data['predicted_eta_minutes']} min")
+                c_bat.metric("Predicted Battery Loss", f"{api_data['predicted_battery_loss_pct']} %")
                 
-
                 if confirm_button:
                     if total_weight > 0:
                         st.session_state['order_data'] = {
-                            'facility': selected_fac,
-                            'hub': assigned_hub_data['assigned_hub_id'],
-                            'operator': assigned_hub_data['hub_operator'],
-                            'duration': assigned_hub_data['predicted_eta_minutes'],
-                            'battery_loss': assigned_hub_data['predicted_battery_loss_pct'],
-                            'drones': drones_needed,
-                            'emergency': emergency,
-                            'wind': live_wind,
-                            'temp': live_temp
+                            'facility': selected_fac, 'hub': api_data['assigned_hub_id'],
+                            'operator': api_data['hub_operator'], 'duration': api_data['predicted_eta_minutes'],
+                            'battery_loss': api_data['predicted_battery_loss_pct'],
+                            'drones': drones_needed, 'emergency': emergency
                         }
                         st.session_state['page'] = 'tracking'
                         st.rerun()
                     else:
                         st.error("Error: Order is empty!")
             else:
-                st.error("🚨 Backend Server Error (500). Impossible de récupérer les prédictions.")
-        except Exception:
-            st.warning("🔌 En attente de connexion avec le conteneur MLOps local (Vérifie uvicorn/ngrok).")
+                st.error("🚨 MLOps API Error 500: The backend prediction server is unreachable.")
+        except Exception as api_err:
+            st.warning("🔌 Connection to local MLOps Docker Container container active. Please launch uvicorn or Docker.")
 
     with col_map:
-        m = folium.Map(location=[target['Latitude'], target['Longitude']], zoom_start=7, tiles='CartoDB Positron')
-        
-        # RENDU VISUEL DES HUBS SUR LA CARTE
-        for _, hub in df_hubs.iterrows():
-            color = 'purple' if hub['Operator'] == 'MASA' else 'black'
-            folium.Marker(
-                [hub['Latitude'], hub['Longitude']], 
-                icon=folium.Icon(color=color, icon='plane', prefix='fa'),
-                tooltip=f"{hub['Hub_ID']} ({hub['Operator']})"
-            ).add_to(m)
-            
-            folium.Circle(
-                [hub['Latitude'], hub['Longitude']],
-                radius=hub['Range_km'] * 1000,
-                color=color,
-                fill=True,
-                fill_opacity=0.03,
-                weight=1
-            ).add_to(m)
-        
-        # Marqueur de l'hôpital cible
+        m = folium.Map(location=[target['Latitude'], target['Longitude']], zoom_start=8, tiles='CartoDB Positron')
         folium.Marker(target_coords, icon=folium.Icon(color='red', icon='hospital-o', prefix='fa')).add_to(m)
-        
-        # Dessiner le tracé dynamique entre l'hôpital et le Hub sélectionné par l'API
-        if assigned_hub_data:
-            matched_hub = df_hubs[df_hubs['Hub_ID'] == assigned_hub_data['assigned_hub_id']]
-            if not matched_hub.empty:
-                hub_row = matched_hub.iloc[0]
-                folium.PolyLine(
-                    [target_coords, (hub_row['Latitude'], hub_row['Longitude'])], 
-                    color="blue", weight=3, dash_array='10',
-                    tooltip="Active Flight Path"
-                ).add_to(m)
-        
-        st_folium(m, width="100%", height=500, key="dispatch_map")
+        st_folium(m, width="100%", height=400, key="dispatch_map")
 
-# ---------------------------------------------------------
 # ---------------------------------------------------------
 # PAGE 2: LIVE TRACKING
 # ---------------------------------------------------------
@@ -206,29 +158,15 @@ elif st.session_state['page'] == 'tracking':
     st.title("📦 Real-Time Mission Tracking")
     st.success(f"Order successfully dispatched to **{data['facility']}**")
     
-    # Rappel de la météo capturée lors du dispatch
-    st.info(f"🌦️ **Weather Conditions during Launch:** {data.get('wind', 15.0)} km/h wind | {data.get('temp', 30.0)}°C")
-    
-    col_fleet, col_progress = st.columns(2)
-    
-    with col_fleet:
-        st.subheader("🔍 Mission & Fleet Details")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🔍 Mission Details")
         st.write(f"**Origin Hub:** {data['hub']} ({data['operator']})")
-        st.write(f"**Priority Level:** {data['emergency']}")
-        st.write(f"**Total Fleet:** {data['drones']} active drone(s) deployed")
-        
-        st.markdown("---")
-        st.subheader("🚁 Individual Drone Status")
-        
-        # Affichage dynamique pour chaque drone de la flotte
-        for i in range(1, data['drones'] + 1):
-            with st.expander(f"🤖 Drone #{i} - Telemetry Predictions", expanded=True):
-                c_drone_eta, c_drone_bat = st.columns(2)
-                # Affichage des métriques par drone
-                c_drone_eta.metric(f"Flight Time", f"{data['duration']} min")
-                c_drone_bat.metric(f"Battery Consumption", f"{data['battery_loss']}%", delta=f"{100 - float(data['battery_loss']):.1f}% Remaining", delta_color="normal")
-                
-    with col_progress:
+        st.write(f"**Priority:** {data['emergency']}")
+        st.write(f"**Fleet:** {data['drones']} drones deployed")
+        st.metric("Model Predicted Flight Time", f"{data['duration']} min")
+        st.metric("Estimated Battery Consumption", f"{data['battery_loss']} %")
+    with c2:
         st.subheader("📈 Flight Progress")
         tracking_table = {
             "Milestone": ["Order Received", "Drone Arming", "Take-off", "En Route", "Delivery"], 
