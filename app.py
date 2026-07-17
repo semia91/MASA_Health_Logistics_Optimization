@@ -14,7 +14,7 @@ st.set_page_config(page_title=app_full_name, layout="wide", page_icon="🚁")
 # --- 1. DATA LOADING FUNCTIONS ---
 @st.cache_data
 def load_data():
-    hubs = pd.read_csv('unified_drone_network.csv')
+    hubs = pd.read_csv('../data/unified_drone_network.csv')
     facilities = pd.read_csv('df_health_diagnostic.csv')
     return hubs, facilities
 
