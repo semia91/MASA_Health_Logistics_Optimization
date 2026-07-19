@@ -21,7 +21,7 @@ This project was developed during the **Jedha Bootcamp Full Stack Data Science**
 - **Cost Efficiency**: Proposed CAPEX of **$1.2M** vs. traditional **$16M** infrastructures.
 - ## Live Demo
 You can access the interactive Dispatch System here:
-**[MASA | Medical Air Supply Application](https://huggingface.co/spaces/semia91/MASA-Logistics)**
+**[MASA | Medical Air Supply Application](https://masahealthlogisticsoptimization-dqr6jwjj8dr9lnrjhbb7oh.streamlit.app/)**
 
 *(Note: Use the "Demo Mode" button on the login page for immediate access.)*
 
